@@ -21,8 +21,13 @@ var scalekit = new ScalekitClient(
   process.env.SCALEKIT_CLIENT_SECRET || ''
 );
 
-const organizationID = 'org_22533691091715588';
-const redirectURI = 'http://localhost:3000/callback';
+/**
+ * https://app.scalekit.cloud/ws/environments/env_32080745237316098/organizations/org_40103405632356531/sso/conn_42560755131744312
+ */
+
+const connectionId = 'conn_42560755131744312';
+const organizationID = 'org_40103405632356531'; // MegaSoft Inc
+const redirectURI = 'http://localhost:3001/callback';
 
 router.get('/', (req, res) => {
   if (session.isloggedin) {
@@ -37,9 +42,13 @@ router.get('/', (req, res) => {
 router.post('/login', (req, res) => {
   let login_type = req.body.login_method;
 
+  console.log('/login: req.body', req.body);
+
   var options = {};
+  console.log('login_type:', login_type);
   if (login_type === 'saml') {
     options['organizationId'] = organizationID;
+    options['connectionId'] = connectionId;
   } else {
     options['provider'] = login_type;
   }
@@ -58,13 +67,19 @@ router.post('/login', (req, res) => {
 
 router.get('/callback', async (req, res) => {
   let errorMessage;
-  const { code, error } = req.query;
-  // console.log('req.query:\n', JSON.stringify(req.query, null, 2));
+  const { code, error, idp_initiated_login } = req.query;
+  console.log('/callback: req.query:\n', JSON.stringify(req.query, null, 2));
+
+  if (idp_initiated_login) {
+    const decodedDetails = jwt.decode(idp_initiated_login);
+    res.status(200).json(decodedDetails);
+  }
 
   if (error) {
     errorMessage = `Redirect callback error: ${error}`;
   } else {
     const profile = await scalekit.authenticateWithCode(code, redirectURI);
+    console.log('profile:', profile);
     const decodedDetails = jwt.decode(profile.idToken);
     res.status(200).json(decodedDetails);
 
@@ -76,6 +91,8 @@ router.get('/callback', async (req, res) => {
     console.error('Unable to exchange code for token:', errorMessage);
     res.status(500).send(errorMessage);
   }
+
+  return;
 });
 
 export default router;
